@@ -3,21 +3,22 @@
 
 
 ## 使用方法
-`tasktime {task-name}`: 
-- 如果任务存在,则会展示任务状态, 回车是开启或暂停计时
-- 如果task-name 不存在, 回车可以创建一个任务并开始计时
+### `tasktime {task-name}` : 搜索或创建任务
+如果task-name 不存在, 回车可以创建一个任务并开始计时
+![](doc/create.gif)
+ 
+### `tasktime ` : 展示所有任务
+展示任务状态, 回车是开启或暂停计时  
+回车暂停
+![](doc/showliststop.gif)
+回车开启
+![](doc/showliststart.gif)
 
-`tasktime `: 展示所有任务
+### `⌘`: 复制指定任务信息
+![](doc/copy.gif)
 
-`⌘`: 复制指定任务信息
+### `⇧+⌘`: 删除指定任务
+![](doc/delete.gif)
 
-`⇧+⌘`: 删除指定任务
-
-`tasktime clean`: 清理所有任务
-
-
-
-
-## TODOLIST
-- [x] fix:修复文件已经清空,但是缓存还有的问题
-- [ ] doc: readme 补全
+### `tasktime clean`: 清理所有任务
+![](doc/clean.gif)
