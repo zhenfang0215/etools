@@ -2,6 +2,25 @@
 
 一个功能强大、界面精美的 uTools 定时器插件，支持自定义时间、任务管理、主题切换等功能。
 
+## 🖼️ 界面预览
+
+以下是插件的主要界面截图：
+
+<div align="center">
+  <img src="doc/白天.png" alt="白天模式界面" width="400px">
+  <p>白天模式界面</p>
+</div>
+
+<div align="center">
+  <img src="doc/黑夜.png" alt="黑夜模式界面" width="400px">
+  <p>黑夜模式界面</p>
+</div>
+
+<div align="center">
+  <img src="doc/设置.png" alt="设置界面" width="400px">
+  <p>设置界面</p>
+</div>
+
 ## ✨ 主要特性
 
 ### 🎯 核心功能
@@ -302,7 +321,7 @@ const supportedLanguages = [
 - **设置项**：设置页面的所有文本
 
 **占位符支持**：某些文本支持动态内容插入
-```javascript
+```
 willFireAt: '将于 {0} 结束'  // {0} 会被替换为具体时间
 timerNotification: '⏰ {0} 时间到！提示: {1}'  // 支持多个参数
 ```
