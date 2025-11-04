@@ -1,0 +1,22 @@
+{
+  "name": "timer",
+  "pluginName": "桌面定时器",
+  "description": "一个可以保持在桌面的定时器工具",
+  "author": "您的名字",
+  "homepage": "",
+  "version": "1.0.0",
+  "logo": "icons/logo.png",
+  "platform": ["win32", "darwin", "linux"],
+  "utools": {
+    "version": "^2.0.0"
+  },
+  "main": "main.html",
+  "preload": "main-preload.js",
+  "features": [
+    {
+      "code": "timer",
+      "explain": "桌面定时器",
+      "cmds": ["timer", "定时器"]
+    }
+  ]
+}

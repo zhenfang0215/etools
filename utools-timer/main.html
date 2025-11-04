@@ -1,0 +1,1542 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>桌面定时器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* CSS 变量定义 - 深色主题（默认） */
+        :root {
+            --bg-primary: #2c2c2c;
+            --bg-secondary: #3c3c3c;
+            --bg-hover: #454545;
+            --bg-active: #4a4a4a;
+            --bg-selected: #3a9cb8;
+            --border-color: #4a4a4a;
+            --text-primary: #e8e8e8;
+            --text-secondary: #a0a0a0;
+        }
+
+        /* 浅色主题 */
+        body.light-theme {
+            --bg-primary: #f5f5f5;
+            --bg-secondary: #ffffff;
+            --bg-hover: #e8e8e8;
+            --bg-active: #d8d8d8;
+            --bg-selected: #8e44ad;
+            --border-color: #e0e0e0;
+            --text-primary: #2c2c2c;
+            --text-secondary: #666666;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: var(--bg-primary);
+            overflow: hidden;
+            user-select: none;
+            margin: 0;
+            padding: 0;
+            min-height: 0;
+            transition: background-color 0.15s ease;
+        }
+        
+        html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            min-height: 0;
+            display: block;
+        }
+
+        /* 列表容器 */
+        .list-container {
+            background: transparent;
+            padding: 0;
+            margin: 0;
+            overflow: visible;
+            min-height: 0;
+        }
+
+        .list-container::-webkit-scrollbar {
+            width: 0px;
+            display: none;
+        }
+
+        /* 列表项 */
+        .list-item {
+            background: var(--bg-secondary);
+            margin: 0;
+            padding: 8px 14px; /* 高度-间距整体压缩 */
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background-color 0.08s ease, color 0.08s ease; /* 只对颜色做过渡，加快速度 */
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 40px; /* 控制最小高度，避免过小 */
+        }
+        
+        .list-item:first-child {
+            border-top: none;
+        }
+        
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        /* 只有在非键盘导航模式下且未被选中时才显示hover效果 */
+        body:not(.keyboard-nav) .list-item:hover:not(.selected) {
+            background: var(--bg-hover);
+        }
+
+        .list-item:active {
+            background: var(--bg-active);
+        }
+
+        .list-item.selected {
+            background: var(--bg-selected);
+            color: white;
+        }
+
+        .list-item.selected .list-item-title,
+        .list-item.selected .list-item-description {
+            color: white !important;
+        }
+
+        .list-item-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            background: transparent;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .list-item-icon img {
+            width: 36px;
+            height: 36px;
+            object-fit: cover;
+            border-radius: 10px;
+        }
+
+        .list-item-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .list-item-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 2px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .list-item-description {
+            font-size: 12px;
+            color: var(--text-secondary);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* 仅标题的项：放大标题字号并垂直居中占满空间 */
+        .list-item.no-desc .list-item-title {
+            font-size: 16px;
+            line-height: 1.25;
+            margin-bottom: 0;
+        }
+        .list-item.no-desc .list-item-content {
+            display: flex;
+            align-items: center;
+        }
+
+        /* 空状态 */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            background: var(--bg-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+
+        .empty-state-title {
+            font-size: 16px;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: var(--text-primary);
+        }
+
+        .empty-state-description {
+            font-size: 13px;
+            opacity: 0.7;
+            color: var(--text-secondary);
+        }
+
+        /* 动画 */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+
+        /* 特殊类型的列表项样式 */
+        .list-item.back-item {
+            background: var(--bg-secondary);
+        }
+
+        /* 只有在非键盘导航模式下且未被选中时才显示hover效果 */
+        body:not(.keyboard-nav) .list-item.back-item:hover:not(.selected) {
+            background: var(--bg-hover);
+        }
+
+        .list-item.back-item.selected {
+            background: var(--bg-selected) !important;
+        }
+
+        /* 设置页面样式 */
+        .settings-page {
+            display: none; /* 默认隐藏 */
+            height: 100vh;
+            background: var(--bg-primary);
+        }
+
+        .settings-page.active {
+            display: flex;
+        }
+
+        .settings-sidebar {
+            width: 200px;
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-color);
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .settings-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.08s ease;
+        }
+
+        body:not(.keyboard-nav) .settings-item:hover:not(.active) {
+            background: var(--bg-hover);
+        }
+
+        .settings-item.active {
+            background: var(--bg-selected);
+            color: white;
+        }
+
+        .settings-item-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .settings-item.active .settings-item-title {
+            color: white;
+        }
+
+        .settings-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .settings-header {
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .settings-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .settings-description {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .settings-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .settings-option:last-child {
+            border-bottom: none;
+        }
+
+        .settings-option-label {
+            flex: 1;
+        }
+
+        .settings-option-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .settings-option-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .settings-option-control {
+            margin-left: 20px;
+        }
+
+        /* 开关样式 */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 44px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .switch-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.2s;
+            border-radius: 24px;
+        }
+
+        .switch-slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.2s;
+            border-radius: 50%;
+        }
+
+        .switch input:checked + .switch-slider {
+            background-color: var(--bg-selected);
+        }
+
+        .switch input:checked + .switch-slider:before {
+            transform: translateX(20px);
+        }
+
+        /* 下拉选择框 */
+        .settings-select {
+            padding: 8px 12px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 14px;
+            cursor: pointer;
+            outline: none;
+            transition: all 0.2s ease;
+            min-width: 120px;
+        }
+
+        .settings-select:hover {
+            border-color: var(--bg-selected);
+        }
+
+        .settings-select:focus {
+            border-color: var(--bg-selected);
+            box-shadow: 0 0 0 2px rgba(124, 77, 255, 0.2);
+        }
+
+        .settings-select option {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        /* 返回按钮 */
+        .settings-back {
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background-color 0.08s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .settings-back:hover {
+            background: var(--bg-hover);
+        }
+
+        .settings-back-icon {
+            font-size: 16px;
+        }
+
+        .settings-back-text {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        /* 空状态 */
+        .settings-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-secondary);
+        }
+
+        .settings-empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .settings-empty-text {
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 列表容器 -->
+        <div id="listContainer" class="list-container">
+            <!-- 列表项将通过 JavaScript 动态生成 -->
+        </div>
+
+        <!-- 设置页面 -->
+        <div id="settingsPage" class="settings-page">
+            <div class="settings-sidebar">
+                <div class="settings-back" id="settingsBack">
+                    <span class="settings-back-icon">←</span>
+                    <span class="settings-back-text">返回</span>
+                </div>
+                <div id="settingsSidebar">
+                    <!-- 设置项列表 -->
+                </div>
+            </div>
+            <div class="settings-content">
+                <div id="settingsContent">
+                    <!-- 设置详情 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 国际化（i18n）系统 ====================
+        
+        // 从 preload 中获取 i18n 配置（已在 main-preload.js 中注入）
+        const i18nMessages = window.i18nMessages;
+        const supportedLanguages = window.supportedLanguages;
+        
+        // 当前语言
+        let currentLanguage = 'en';
+        
+        // 获取保存的语言设置
+        function getSavedLanguage() {
+            return utools.dbStorage.getItem('language') || 'en';
+        }
+        
+        // 保存语言设置
+        function saveLanguage(lang) {
+            currentLanguage = lang;
+            utools.dbStorage.setItem('language', lang);
+            // 重新初始化界面
+            if (isInSettingsPage) {
+                // 更新 Back 按钮文本
+                const backText = settingsBack.querySelector('.settings-back-text');
+                if (backText) {
+                    backText.textContent = t('settingsBack');
+                }
+                // 重新渲染设置页面内容
+                renderSettingsSidebar();
+                if (currentSettingsCategory) {
+                    showSettingsCategory(currentSettingsCategory);
+                }
+            } else {
+                updateList(currentSearchTerm);
+            }
+        }
+        
+        // 翻译函数
+        function t(key, ...args) {
+            const messages = i18nMessages[currentLanguage] || i18nMessages['en'];
+            let text = messages[key] || key;
+            
+            // 支持占位符替换 {0}, {1}, ...
+            args.forEach((arg, index) => {
+                text = text.replace(`{${index}}`, arg);
+            });
+            
+            return text;
+        }
+        
+        // 翻译列表项文本（从英文到当前语言）
+        function translateItem(item) {
+            // 特殊处理：如果是 custom 类型且描述为空，使用 customHint
+            if (item.type === 'custom' && (!item.description || item.description === '')) {
+                return {
+                    ...item,
+                    description: t('customHint')
+                };
+            }
+            
+            if (currentLanguage === 'en') return item;
+            
+            // 标题翻译映射
+            const titleMap = {
+                'Pomodoro': t('pomodoro'),
+                'Short Break': t('shortBreak'),
+                'Set timer for 5 minutes': t('shortBreak'),
+                'Long Break': t('longBreak'),
+                'Set timer for 10 minutes': t('longBreak'),
+                'Custom': t('custom'),
+                'Set timer': t('custom'),
+                'Show activity timers': t('history'),
+                'Activity Timers': t('history'),
+                'Settings': t('settings'),
+                'Start': t('startTask'),
+                'Cancel': t('cancelTask'),
+                'Cancel timer': t('cancelTimer'),
+                'Modify Time': t('modifyTime'),
+                'Set new time': t('setNewTime'),
+                'Back to Tasks': t('backToTasks'),
+                'Back to Main': t('backToMain'),
+                'No running timers': t('noRunningTasks'),
+                'No active timers. Create new one?': t('noActiveTimers'),
+                'Failed to get current tasks': t('getTasksFailed'),
+                'Not started': t('notStarted'),
+                '没有找到匹配的定时器': t('noResults'),
+                '尚未开始': t('notStarted'),
+                '暂无活动定时器，创建新的？': t('noActiveTimers'),
+                '获取当前任务失败': t('getTasksFailed'),
+                '取消定时器': t('cancelTimer'),
+                '设置新时间': t('setNewTime'),
+            };
+            
+            // 描述翻译映射
+            const descMap = {
+                'Standard 25-minute work timer': t('pomodoroDesc'),
+                'Quick 5-minute rest': t('shortBreakDesc'),
+                '15-minute relaxation time': t('longBreakDesc'),
+                'Enter custom time': t('customDesc'),
+                'Hit ↩︎ to set to 1 minute or provide duration': t('customHint'),
+                'View all running timers': t('historyDesc'),
+                '配置定时器设置': t('settingsDesc'),
+                'Configure app preferences': t('settingsDesc'),
+                'Start a timer to see it here': t('noRunningTasksDesc'),
+                'Return to task list': t('backToTasksList'),
+                'Cannot read running tasks': t('cannotReadTasks'),
+                'No description': t('noDescription'),
+                '请尝试其他关键词，如：休息、25分钟、自定义等': t('noResultsDesc'),
+                'Try different keywords': t('noResultsDesc'),
+                '无法读取当前运行中的任务': t('cannotReadTasks'),
+                '无描述信息': t('noDescription'),
+                '返回任务列表': t('backToTasksList'),
+            };
+            
+            // 处理动态生成的文本（如 "Will fire at 14:30"）
+            let translatedTitle = titleMap[item.title] || item.title;
+            let translatedDesc = descMap[item.description] || item.description;
+            
+            // 翻译包含 "Timer" 的标题（如 "Timer 25 分钟"）
+            if (item.title && item.title.startsWith('Timer ') || item.title.startsWith('定时器 ')) {
+                // 保持原样，因为这是从 index.js 动态生成的，已经翻译过了
+            }
+            
+            // 翻译 "Will fire at" 描述
+            if (item.description && (item.description.startsWith('Will fire at') || item.description.startsWith('将于'))) {
+                // 保持原样，因为这是从 index.js 动态生成的，已经翻译过了
+            }
+            
+            return {
+                ...item,
+                title: translatedTitle,
+                description: translatedDesc
+            };
+        }
+        
+        
+        // ==================== 主应用代码 ====================
+        
+        // 导入业务逻辑（在 preload 中已经注入）
+        const TimerBusiness = window.TimerBusinessLogic;
+        
+        // DOM 元素
+        const listContainer = document.getElementById('listContainer');
+        const settingsPage = document.getElementById('settingsPage');
+        const settingsSidebar = document.getElementById('settingsSidebar');
+        const settingsContent = document.getElementById('settingsContent');
+        const settingsBack = document.getElementById('settingsBack');
+
+        // 当前状态
+        let currentSearchTerm = '';
+        let selectedIndex = 0; // 当前选中的列表项索引
+        let isInSubView = false; // 🔥 是否在子视图中（如任务列表、操作菜单等）
+        let isUsingKeyboard = false; // 🔥 是否正在使用键盘导航
+        let isInSettingsPage = false; // 是否在设置页面
+        let currentSettingsCategory = null; // 当前选中的设置分类
+        let selectedSettingsIndex = 0; // 当前选中的设置分类索引
+        
+        // 鼠标位置追踪（用于防止进入时误触）
+        let lastMouseX = null;
+        let lastMouseY = null;
+
+        // 获取保存的主题设置
+        function getSavedTheme() {
+            return utools.dbStorage.getItem('theme') || 'system';
+        }
+        
+        // 保存主题设置
+        function saveTheme(theme) {
+            utools.dbStorage.setItem('theme', theme);
+            applyTheme();
+        }
+        
+        // 应用主题
+        function applyTheme() {
+            const savedTheme = getSavedTheme();
+            
+            if (savedTheme === 'dark') {
+                // 强制深色主题
+                document.body.classList.remove('light-theme');
+            } else if (savedTheme === 'light') {
+                // 强制浅色主题
+                document.body.classList.add('light-theme');
+            } else {
+                // 跟随系统
+                const isDark = utools.isDarkColors();
+                if (isDark) {
+                    document.body.classList.remove('light-theme');
+                } else {
+                    document.body.classList.add('light-theme');
+                }
+            }
+        }
+
+        // 获取设置数据（动态生成以支持 i18n）
+        function getSettingsData() {
+            return [
+                {
+                    id: 'appearance',
+                    title: t('appearanceSettings'),
+                    description: t('appearanceDesc'),
+                    options: [
+                        { 
+                            id: 'theme', 
+                            title: t('theme'), 
+                            description: t('themeDesc'), 
+                            type: 'select',
+                            value: 'system',
+                            options: [
+                                { value: 'system', label: t('themeSystem') },
+                                { value: 'dark', label: t('themeDark') },
+                                { value: 'light', label: t('themeLight') }
+                            ]
+                        },
+                        { 
+                            id: 'language', 
+                            title: t('language'), 
+                            description: t('languageDesc'), 
+                            type: 'select',
+                            value: 'en',
+                            options: supportedLanguages
+                        }
+                    ]
+                }
+            ];
+        }
+
+        // 显示设置页面
+        function showSettingsPage() {
+            isInSettingsPage = true;
+            listContainer.style.display = 'none';
+            settingsPage.classList.add('active');
+            
+            // 🔥 初始化设置页面的键盘导航
+            selectedSettingsIndex = 0;
+            isUsingKeyboard = true;
+            document.body.classList.add('keyboard-nav');
+            lastMouseX = null;
+            lastMouseY = null;
+            
+            // 更新返回按钮文本
+            const backText = settingsBack.querySelector('.settings-back-text');
+            if (backText) {
+                backText.textContent = t('settingsBack');
+            }
+            
+            // 渲染设置侧边栏
+            renderSettingsSidebar();
+            
+            // 默认选中第一个分类
+            const settingsData = getSettingsData();
+            if (settingsData.length > 0) {
+                showSettingsCategory(settingsData[0].id);
+            }
+            
+            // 调整窗口高度为固定高度
+            utools.setExpendHeight(500);
+            
+            // 更新输入框提示
+            utools.setSubInput(({ text }) => {
+                currentSearchTerm = text;
+                searchSettings(text);
+            }, t('settingsSearch'), true);
+        }
+
+        // 隐藏设置页面，返回主列表
+        function hideSettingsPage() {
+            isInSettingsPage = false;
+            settingsPage.classList.remove('active');
+            listContainer.style.display = 'block';
+            currentSearchTerm = '';
+            
+            // 🔥 重置高度变量，强制重新计算高度
+            lastHeight = 0;
+            lastItemCount = 0;
+            
+            // 🔥 重置鼠标位置，防止立即触发鼠标选择
+            isUsingKeyboard = true;
+            document.body.classList.add('keyboard-nav');
+            lastMouseX = null;
+            lastMouseY = null;
+            
+            // 恢复主列表
+            utools.setSubInput(({ text }) => {
+                currentSearchTerm = text;
+                handleSearch(text);
+            }, t('inputPlaceholder'), true);
+            
+            updateList('');
+        }
+
+        // 渲染设置侧边栏
+        function renderSettingsSidebar(filteredData = null) {
+            if (!filteredData) {
+                filteredData = getSettingsData();
+            }
+            settingsSidebar.innerHTML = filteredData.map((category, index) => `
+                <div class="settings-item ${index === selectedSettingsIndex ? 'active' : ''}" 
+                     data-category="${category.id}"
+                     data-index="${index}">
+                    <div class="settings-item-title">${category.title}</div>
+                </div>
+            `).join('');
+            
+            // 添加点击事件和鼠标悬停事件
+            settingsSidebar.querySelectorAll('.settings-item').forEach((elem, index) => {
+                elem.addEventListener('click', () => {
+                    const categoryId = elem.dataset.category;
+                    selectedSettingsIndex = index;
+                    showSettingsCategory(categoryId);
+                });
+                
+                // 鼠标悬停时更新选中索引（但如果正在使用键盘则忽略）
+                elem.addEventListener('mouseenter', () => {
+                    if (!isUsingKeyboard) {
+                        selectedSettingsIndex = index;
+                        updateSelectedSettingsItem();
+                    }
+                });
+            });
+        }
+
+        // 显示设置分类详情
+        function showSettingsCategory(categoryId) {
+            currentSettingsCategory = categoryId;
+            const settingsData = getSettingsData();
+            const category = settingsData.find(c => c.id === categoryId);
+            
+            if (!category) return;
+            
+            // 更新侧边栏选中状态
+            settingsSidebar.querySelectorAll('.settings-item').forEach(elem => {
+                if (elem.dataset.category === categoryId) {
+                    elem.classList.add('active');
+                } else {
+                    elem.classList.remove('active');
+                }
+            });
+            
+            // 渲染详情内容
+            settingsContent.innerHTML = `
+                <div class="settings-header">
+                    <div class="settings-title">${category.title}</div>
+                    <div class="settings-description">${category.description || ''}</div>
+                </div>
+                ${category.options.map(option => {
+                    // 获取当前保存的值
+                    let currentValue = option.value;
+                    if (option.id === 'theme') {
+                        currentValue = getSavedTheme();
+                    } else if (option.id === 'language') {
+                        currentValue = getSavedLanguage();
+                    }
+                    
+                    return `
+                    <div class="settings-option">
+                        <div class="settings-option-label">
+                            <div class="settings-option-title">${option.title}</div>
+                            <div class="settings-option-desc">${option.description}</div>
+                        </div>
+                        <div class="settings-option-control">
+                            ${option.type === 'select' ? `
+                                <select class="settings-select" data-option="${option.id}">
+                                    ${option.options.map(opt => `
+                                        <option value="${opt.value}" ${currentValue === opt.value ? 'selected' : ''}>
+                                            ${opt.label}
+                                        </option>
+                                    `).join('')}
+                                </select>
+                            ` : option.type === 'switch' ? `
+                                <label class="switch">
+                                    <input type="checkbox" ${currentValue ? 'checked' : ''} 
+                                           data-option="${option.id}">
+                                    <span class="switch-slider"></span>
+                                </label>
+                            ` : option.type === 'button' ? `
+                                <button class="settings-button" data-action="${option.action}">
+                                    执行
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                    `;
+                }).join('')}
+            `;
+            
+            // 添加下拉选择框事件监听
+            settingsContent.querySelectorAll('.settings-select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    const optionId = e.target.dataset.option;
+                    const value = e.target.value;
+                    
+                    if (optionId === 'theme') {
+                        saveTheme(value);
+                    } else if (optionId === 'language') {
+                        saveLanguage(value);
+                    }
+                });
+            });
+            
+            // 添加开关事件监听
+            settingsContent.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                checkbox.addEventListener('change', (e) => {
+                    const optionId = e.target.dataset.option;
+                    console.log(`设置 ${optionId} 已${e.target.checked ? '开启' : '关闭'}`);
+                });
+            });
+        }
+
+        // 搜索设置项
+        function searchSettings(searchTerm) {
+            if (!searchTerm || searchTerm.trim() === '') {
+                renderSettingsSidebar();
+                if (currentSettingsCategory) {
+                    showSettingsCategory(currentSettingsCategory);
+                }
+                return;
+            }
+            
+            const term = searchTerm.toLowerCase().trim();
+            const settingsData = getSettingsData();
+            
+            // 过滤设置分类和选项
+            const filteredData = settingsData.map(category => {
+                const matchingOptions = category.options.filter(option => 
+                    option.title.toLowerCase().includes(term) ||
+                    option.description.toLowerCase().includes(term)
+                );
+                
+                return {
+                    ...category,
+                    options: matchingOptions
+                };
+            }).filter(category => 
+                category.title.toLowerCase().includes(term) ||
+                category.options.length > 0
+            );
+            
+            if (filteredData.length === 0) {
+                const noResultsText = t('noSettingsFound');
+                settingsSidebar.innerHTML = `<div class="settings-empty"><div class="settings-empty-icon">🔍</div><div class="settings-empty-text">${noResultsText}</div></div>`;
+                settingsContent.innerHTML = `<div class="settings-empty"><div class="settings-empty-icon">🔍</div><div class="settings-empty-text">${noResultsText}</div></div>`;
+            } else {
+                renderSettingsSidebar(filteredData);
+                // 自动选中第一个匹配的分类
+                if (filteredData.length > 0) {
+                    showSettingsCategory(filteredData[0].id);
+                }
+            }
+        }
+
+        // 初始化（在插件进入时调用）
+        function initialize() {
+            // 🌍 加载保存的语言
+            currentLanguage = getSavedLanguage();
+            
+            // 🎨 应用主题
+            applyTheme();
+            
+            // 🔥 进入插件时禁用鼠标选择，避免鼠标正好在某个item上时立即被选中
+            isUsingKeyboard = true;
+            document.body.classList.add('keyboard-nav');
+            lastMouseX = null;
+            lastMouseY = null;
+            
+            // 🔥 先设置一个初始预估高度（4个项目）
+            utools.setExpendHeight(estimateHeight(4));
+            
+            // 执行数据库维护
+            TimerBusiness.initializeDatabaseMaintenance();
+            
+            // 检查过期的定时器
+            TimerBusiness.checkExpiredTimers();
+            
+            // 重置状态
+            TimerBusiness.setCurrentState('normal');
+            currentSearchTerm = '';
+            lastHeight = 0; // 重置上次高度
+            isInSubView = false; // 🔥 重置子视图状态
+            
+            // 确保设置页面已隐藏
+            if (isInSettingsPage) {
+                settingsPage.classList.remove('active');
+                listContainer.style.display = 'block';
+                isInSettingsPage = false;
+            }
+            
+            // 显示初始列表
+            updateList('');
+            
+            // 启动实时更新
+            TimerBusiness.startRealTimeUpdate();
+            
+            // 🔥 使用 uTools 主输入框（每次进入时都要设置）
+            utools.setSubInput(({ text }) => {
+                currentSearchTerm = text;
+                handleSearch(text);
+            }, t('inputPlaceholder'), true);
+        }
+        
+        // 处理键盘事件
+        function handleKeyDown(e) {
+            // 如果在设置页面，使用设置页面的键盘导航
+            if (isInSettingsPage) {
+                handleSettingsKeyDown(e);
+                return;
+            }
+            
+            // 主列表的键盘导航
+            const items = window.currentListItems;
+            if (!items || items.length === 0) return;
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                isUsingKeyboard = true; // 标记正在使用键盘
+                document.body.classList.add('keyboard-nav'); // 添加键盘导航类
+                selectedIndex = (selectedIndex + 1) % items.length;
+                updateSelectedItem();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                isUsingKeyboard = true; // 标记正在使用键盘
+                document.body.classList.add('keyboard-nav'); // 添加键盘导航类
+                selectedIndex = (selectedIndex - 1 + items.length) % items.length;
+                updateSelectedItem();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (items[selectedIndex]) {
+                    handleItemClick(items[selectedIndex]);
+                }
+            }
+        }
+        
+        // 设置页面的键盘导航
+        function handleSettingsKeyDown(e) {
+            const settingsData = getSettingsData();
+            
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                isUsingKeyboard = true;
+                document.body.classList.add('keyboard-nav');
+                selectedSettingsIndex = (selectedSettingsIndex + 1) % settingsData.length;
+                updateSelectedSettingsItem();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                isUsingKeyboard = true;
+                document.body.classList.add('keyboard-nav');
+                selectedSettingsIndex = (selectedSettingsIndex - 1 + settingsData.length) % settingsData.length;
+                updateSelectedSettingsItem();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                // 展开当前选中的设置分类
+                showSettingsCategory(settingsData[selectedSettingsIndex].id);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                // ESC 键返回主列表
+                hideSettingsPage();
+            }
+        }
+        
+        // 更新设置页面选中项的显示
+        function updateSelectedSettingsItem() {
+            const settingsItems = settingsSidebar.querySelectorAll('.settings-item');
+            let selectedCategoryId = null;
+            
+            settingsItems.forEach((elem, index) => {
+                if (index === selectedSettingsIndex) {
+                    elem.classList.add('active');
+                    // 滚动到可见区域
+                    elem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    selectedCategoryId = elem.dataset.category;
+                } else {
+                    elem.classList.remove('active');
+                }
+            });
+            
+            // 更新详情内容
+            if (selectedCategoryId) {
+                showSettingsCategory(selectedCategoryId);
+            }
+        }
+        
+        // 更新选中项的显示
+        function updateSelectedItem() {
+            const listItems = listContainer.querySelectorAll('.list-item');
+            listItems.forEach((elem, index) => {
+                if (index === selectedIndex) {
+                    elem.classList.add('selected');
+                    // 滚动到可见区域
+                    elem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                } else {
+                    elem.classList.remove('selected');
+                }
+            });
+        }
+
+        // 更新列表显示
+        function updateList(searchTerm) {
+            TimerBusiness.setCurrentSearchTerm(searchTerm);
+            
+            const currentState = TimerBusiness.getCurrentState();
+            const items = TimerBusiness.generateListItemsWithDynamicTime(searchTerm);
+            
+            // 渲染列表
+            renderList(items);
+        }
+
+        // 快速预估高度（在渲染前）
+        function estimateHeight(itemCount) {
+            const itemHeight = 48; // 🔥 稍微增加预估高度（44 + 边距/边框）
+            const estimated = itemCount * itemHeight + 30; // 🔥 额外增加 30px 容错
+            return Math.min(estimated, 500);
+        }
+        
+        // 上次的列表项数量
+        let lastItemCount = 0;
+        
+        // 渲染列表
+        function renderList(items, keepSelection = false) {
+            // 🌍 翻译列表项
+            if (items && items.length > 0) {
+                items = items.map(item => translateItem(item));
+            }
+            
+            if (!items || items.length === 0) {
+                // 🔥 先快速设置预估高度
+                utools.setExpendHeight(estimateHeight(0) || 150);
+                
+                listContainer.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">⏰</div>
+                        <div class="empty-state-title">${t('noResults')}</div>
+                        <div class="empty-state-description">${t('noResultsDesc')}</div>
+                    </div>
+                `;
+                selectedIndex = 0;
+                lastItemCount = 0;
+                adjustWindowHeight();
+                return;
+            }
+
+            // 🔥 只有列表项数量变化时才预估高度
+            if (items.length !== lastItemCount) {
+                utools.setExpendHeight(estimateHeight(items.length));
+                lastItemCount = items.length;
+            }
+            
+            // 🔥 保持当前选中的索引（刷新时不重置）
+            if (!keepSelection) {
+                selectedIndex = 0;
+            } else {
+                // 确保索引在有效范围内
+                selectedIndex = Math.min(selectedIndex, items.length - 1);
+            }
+
+            listContainer.innerHTML = items.map((item, index) => {
+                const icon = getIconContent(item.icon, item.type);
+                const itemClass = getItemClass(item.type);
+                const selectedClass = index === selectedIndex ? 'selected' : '';
+                const descClass = item.description ? 'has-desc' : 'no-desc';
+                
+                return `
+                    <div class="list-item ${itemClass} ${selectedClass} ${descClass}" data-index="${index}">
+                        <div class="list-item-icon">${icon}</div>
+                        <div class="list-item-content">
+                            <div class="list-item-title">${escapeHtml(item.title)}</div>
+                            ${item.description ? `<div class="list-item-description">${escapeHtml(item.description)}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // 添加点击事件和鼠标悬停事件
+            const listItems = listContainer.querySelectorAll('.list-item');
+            listItems.forEach((elem, index) => {
+                elem.addEventListener('click', () => handleItemClick(items[index]));
+                // 鼠标悬停时更新选中索引（但如果正在使用键盘则忽略）
+                elem.addEventListener('mouseenter', () => {
+                    if (!isUsingKeyboard) {
+                        selectedIndex = index;
+                        updateSelectedItem();
+                    }
+                });
+            });
+
+            // 保存当前列表项供键盘操作使用
+            window.currentListItems = items;
+            
+            // 🔥 只有列表项数量变化时才调整窗口高度
+            if (items.length !== lastItemCount || !keepSelection) {
+                adjustWindowHeight();
+            }
+        }
+        
+        // 防抖定时器
+        let heightAdjustTimer = null;
+        let lastHeight = 0;
+        
+        // 动态调整窗口高度（优化版）
+        function adjustWindowHeight() {
+            // 清除之前的定时器
+            if (heightAdjustTimer) {
+                clearTimeout(heightAdjustTimer);
+            }
+            
+            // 立即计算高度（使用 requestAnimationFrame 确保 DOM 已更新）
+            requestAnimationFrame(() => {
+                let totalHeight = 0;
+                
+                // 🔥 使用 scrollHeight 获取内容高度（最快最准确）
+                totalHeight = listContainer.scrollHeight;
+                
+                // 如果 scrollHeight 为 0，使用备用方案
+                if (totalHeight === 0) {
+                    const rect = listContainer.getBoundingClientRect();
+                    totalHeight = rect.height;
+                }
+                
+                // 如果还是 0，手动计算
+                if (totalHeight === 0) {
+                    const listItems = listContainer.querySelectorAll('.list-item');
+                    listItems.forEach(item => {
+                        totalHeight += item.offsetHeight;
+                    });
+                    
+                    // 如果没有列表项，检查是否有空状态
+                    if (listItems.length === 0) {
+                        const emptyState = listContainer.querySelector('.empty-state');
+                        if (emptyState) {
+                            totalHeight += emptyState.offsetHeight;
+                        }
+                    }
+                }
+                
+                // 设置最大高度 500px（不设最小高度，让它自适应）
+                const finalHeight = Math.min(totalHeight, 500);
+                
+                // 只有当高度真正变化时才调整
+                if (finalHeight !== lastHeight) {
+                    utools.setExpendHeight(finalHeight);
+                    lastHeight = finalHeight;
+                }
+            });
+        }
+
+        // 获取图标内容
+        function getIconContent(iconPath, type) {
+            // 如果是图片路径，使用 img 标签
+            if (iconPath && iconPath.startsWith('./icons/')) {
+                return `<img src="${iconPath}" alt="icon">`;
+            }
+            
+            // 否则使用 emoji 图标
+            const iconMap = {
+                'history': '📋',
+                'shortBreak': '☕',
+                'longBreak': '🛋️',
+                'custom': '⚙️',
+                'custom_time': '⏱️',
+                'current_task_item': '▶️',
+                'modify_time': '✏️',
+                'cancel_task': '❌',
+                'back_to_tasks': '◀️',
+                'back_to_main': '◀️',
+                'ready_to_start': '✅',
+                'ready_to_modify': '✅',
+                'message_input_waiting': '💬',
+                'modify_time_input': '✏️',
+                'custom_input_hint': '⚙️',
+                'settings': '⚙️'
+            };
+            
+            return iconMap[type] || '⏰';
+        }
+
+        // 获取列表项样式类
+        function getItemClass(type) {
+            if (type && (type.includes('back') || type === 'back_to_tasks' || type === 'back_to_main')) {
+                return 'back-item';
+            }
+            if (type === 'ready_to_start' || type === 'ready_to_modify') {
+                return 'success';
+            }
+            return '';
+        }
+
+        // 处理列表项点击
+        function handleItemClick(itemData) {
+            // 停止实时更新
+            TimerBusiness.stopRealTimeUpdate();
+            
+            const currentState = TimerBusiness.getCurrentState();
+            
+            // 处理设置页面
+            if (itemData.type === 'settings') {
+                showSettingsPage();
+                return;
+            }
+            
+            // 处理等待输入状态
+            if (itemData.type === 'message_input_waiting') {
+                return;
+            }
+            
+            // 处理准备启动
+            if (itemData.type === 'ready_to_start') {
+                if (itemData.timerData && (!itemData.message || itemData.message.trim() === '')) {
+                    return;
+                }
+                
+                TimerBusiness.setCurrentState('normal');
+                TimerBusiness.setWaitingTimerData(null);
+                
+                if (itemData.timerData) {
+                    TimerBusiness.handleTimerSelection(itemData.timerData, itemData.message || '');
+                } else {
+                    TimerBusiness.startTimer(itemData.duration, itemData.timerName, '');
+                }
+                
+                // 关闭窗口
+                if (typeof utools !== 'undefined') {
+                    utools.hideMainWindow();
+                    utools.outPlugin();
+                }
+                return;
+            }
+            
+            // 处理准备修改时间
+            if (itemData.type === 'ready_to_modify' && itemData.taskData) {
+                TimerBusiness.modifyTimerTaskTime(itemData.taskData.taskId, itemData.duration, (items) => {
+                    renderList(items);
+                });
+                TimerBusiness.setCurrentState('normal');
+                TimerBusiness.setWaitingTimerData(null);
+                return;
+            }
+            
+            // 处理自定义时间
+            if (itemData.type === 'custom') {
+                isInSubView = false; // 🔥 输入模式不算子视图
+                TimerBusiness.setCurrentState('custom_input');
+                utools.setSubInputValue('');
+                updateList('');
+                return;
+            }
+            
+            // 处理历史查看
+            if (itemData.type === 'history') {
+                isInSubView = true; // 🔥 进入子视图
+                TimerBusiness.showCurrentRunningTasks((items) => {
+                    renderList(items);
+                });
+                return;
+            }
+            
+            // 处理任务项选择
+            if (itemData.type === 'current_task_item' && itemData.taskData) {
+                isInSubView = true; // 🔥 进入子视图
+                const options = [{
+                    title: t('setNewTime'),
+                    description: '',
+                    icon: './icons/edit_time.png',
+                    type: 'modify_time',
+                    taskData: itemData.taskData
+                }, {
+                    title: t('cancelTimer'),
+                    description: '',
+                    icon: './icons/cancel.png',
+                    type: 'cancel_task',
+                    taskData: itemData.taskData
+                }, {
+                    title: `← ${t('backToTasks')}`,
+                    description: t('backToTasksList'),
+                    icon: './icons/back.png',
+                    type: 'back_to_tasks'
+                }];
+                renderList(options);
+                return;
+            }
+            
+            // 处理修改时间操作
+            if (itemData.type === 'modify_time' && itemData.taskData) {
+                isInSubView = false; // 🔥 输入模式不算子视图
+                TimerBusiness.setCurrentState('modify_time');
+                TimerBusiness.setWaitingTimerData(itemData.taskData);
+                utools.setSubInputValue('');
+                updateList('');
+                return;
+            }
+            
+            // 处理取消任务
+            if (itemData.type === 'cancel_task' && itemData.taskData) {
+                isInSubView = true; // 🔥 取消后还在任务列表
+                TimerBusiness.cancelTimerTask(itemData.taskData.taskId, (items) => {
+                    renderList(items);
+                });
+                return;
+            }
+            
+            // 处理返回任务列表
+            if (itemData.type === 'back_to_tasks') {
+                isInSubView = true; // 🔥 仍在子视图
+                TimerBusiness.showCurrentRunningTasks((items) => {
+                    renderList(items);
+                });
+                return;
+            }
+            
+            // 处理返回主菜单
+            if (itemData.type === 'back_to_main') {
+                isInSubView = false; // 🔥 回到主视图
+                TimerBusiness.setCurrentState('normal');
+                utools.setSubInputValue('');
+                updateList('');
+                TimerBusiness.startRealTimeUpdate();
+                return;
+            }
+            
+            // 默认处理：进入提示信息输入模式
+            isInSubView = false; // 🔥 输入模式不算子视图
+            TimerBusiness.setCurrentState('message_input');
+            TimerBusiness.setWaitingTimerData(itemData);
+            utools.setSubInputValue('');
+            updateList('');
+        }
+
+        // 处理搜索输入
+        function handleSearch(searchTerm) {
+            const currentState = TimerBusiness.getCurrentState();
+            
+            // 如果在提示信息输入状态
+            if (currentState === 'message_input') {
+                TimerBusiness.stopRealTimeUpdate();
+                const waitingData = TimerBusiness.getWaitingTimerData();
+                
+                if (searchTerm && searchTerm.trim() !== '') {
+                    renderList([{
+                        title: `${waitingData.title}`,
+                        description: `提示信息: "${searchTerm}"，按回车确认`,
+                        icon: waitingData.icon,
+                        type: 'ready_to_start',
+                        timerData: waitingData,
+                        message: searchTerm
+                    }]);
+                } else {
+                    renderList([{
+                        title: `${waitingData.title}`,
+                        description: '请输入提示信息（必填）',
+                        icon: waitingData.icon,
+                        type: 'message_input_waiting',
+                        timerData: waitingData
+                    }]);
+                }
+                return;
+            }
+            
+            // 如果在时间修改输入状态
+            if (currentState === 'modify_time') {
+                TimerBusiness.stopRealTimeUpdate();
+                const timeInfo = TimerBusiness.parseTimeInput(searchTerm);
+                
+                if (timeInfo) {
+                    renderList([{
+                        title: `修改为 ${timeInfo.displayText}`,
+                        description: `将定时器时间修改为 ${timeInfo.displayText}，按回车确认`,
+                        icon: './icons/edit.png',
+                        type: 'ready_to_modify',
+                        duration: timeInfo.duration,
+                        taskData: TimerBusiness.getWaitingTimerData()
+                    }]);
+                } else {
+                    renderList([{
+                        title: '修改时间',
+                        description: '请输入正确的时间格式（如：30分钟、45秒、2小时）',
+                        icon: './icons/edit.png',
+                        type: 'modify_time_input_hint'
+                    }]);
+                }
+                return;
+            }
+            
+            // 如果在自定义时间输入状态
+            if (currentState === 'custom_input') {
+                TimerBusiness.stopRealTimeUpdate();
+                const timeInfo = TimerBusiness.parseTimeInput(searchTerm);
+                
+                if (timeInfo) {
+                    renderList([{
+                        title: `定时器 ${timeInfo.displayText}`,
+                        description: `将设置 ${timeInfo.displayText} 的定时器，按回车开始`,
+                        icon: './icons/logo.png',
+                        type: 'ready_to_start',
+                        duration: timeInfo.duration,
+                        timerName: `自定义定时器 ${timeInfo.displayText}`
+                    }]);
+                } else {
+                    renderList([{
+                        title: '自定义时间',
+                        description: '请输入正确的时间格式（如：30分钟、45秒、2小时）',
+                        icon: './icons/logo.png',
+                        type: 'custom_input_hint'
+                    }]);
+                }
+                return;
+            }
+            
+            // 正常搜索
+            TimerBusiness.setCurrentState('normal');
+            updateList(searchTerm);
+            TimerBusiness.startRealTimeUpdate();
+        }
+
+        // HTML 转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 设置回调函数供业务逻辑使用
+        TimerBusiness.setCurrentCallbackSetList((items) => {
+            renderList(items, true); // 🔥 刷新时保持选中状态
+        });
+
+        // 每秒更新一次列表（保持时间信息同步到秒）
+        setInterval(() => {
+            const currentState = TimerBusiness.getCurrentState();
+            // 🔥 只有在主视图且状态为 normal 时才刷新
+            if (currentState === 'normal' && !isInSubView) {
+                // 更新时保持选中状态
+                const items = TimerBusiness.generateListItemsWithDynamicTime(currentSearchTerm);
+                renderList(items, true);
+            }
+        }, 1000);
+
+        // 🔥 页面加载完成后设置事件监听
+        window.addEventListener('DOMContentLoaded', () => {
+            // 监听键盘事件
+            document.addEventListener('keydown', handleKeyDown);
+            
+            // 监听鼠标移动事件 - 只有真正移动时才启用鼠标选择
+            const mouseMoveThreshold = 5; // 鼠标移动阈值（像素）
+            
+            document.addEventListener('mousemove', (e) => {
+                // 如果是首次记录，只记录位置不启用鼠标
+                if (lastMouseX === null || lastMouseY === null) {
+                    lastMouseX = e.clientX;
+                    lastMouseY = e.clientY;
+                    return;
+                }
+                
+                // 计算鼠标移动距离
+                const deltaX = Math.abs(e.clientX - lastMouseX);
+                const deltaY = Math.abs(e.clientY - lastMouseY);
+                
+                // 只有当鼠标真正移动超过阈值时，才启用鼠标选择
+                if (deltaX > mouseMoveThreshold || deltaY > mouseMoveThreshold) {
+                    isUsingKeyboard = false;
+                    document.body.classList.remove('keyboard-nav');
+                    lastMouseX = e.clientX;
+                    lastMouseY = e.clientY;
+                }
+            });
+            
+            // 监听设置页面返回按钮
+            settingsBack.addEventListener('click', () => {
+                hideSettingsPage();
+            });
+            
+            // 监听插件进入事件 - 每次进入时都重新初始化
+            window.utools.onPluginEnter(({ code, type, payload }) => {
+                initialize();
+            });
+        });
+    </script>
+</body>
+</html>
+
