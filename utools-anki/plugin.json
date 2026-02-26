@@ -1,0 +1,19 @@
+{
+  "name": "anki-cards",
+  "pluginName": "Anki卡片收集",
+  "description": "快速收集并批量提交Anki卡片",
+  "author": "fangzhen",
+  "homepage": "",
+  "version": "1.0.0",
+  "logo": "icons/logo.png",
+  "platform": ["win32", "darwin", "linux"],
+  "main": "main.html",
+  "preload": "preload.js",
+  "features": [
+    {
+      "code": "anki",
+      "explain": "Anki卡片收集",
+      "cmds": ["anki", "卡片"]
+    }
+  ]
+}
