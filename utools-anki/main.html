@@ -59,6 +59,13 @@
             align-items: center;
         }
 
+        .settings-bar .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
         .setting-group {
             display: flex;
             align-items: center;
@@ -387,11 +394,68 @@
             visibility: visible;
             opacity: 1;
         }
+        
+        /*下拉框选项样式调整 */
+        .setting-select {
+            padding-right: 30px;
+        }
+        
+        /* 自定义对话框样式 */
+        .dialog-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .dialog-content {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            min-width: 300px;
+            max-width: 400px;
+        }
+        
+        .dialog-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+        
+        .dialog-input {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-input);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 14px;
+            margin-bottom: 16px;
+            outline: none;
+        }
+        
+        .dialog-input:focus {
+            border-color: var(--accent-color);
+        }
+        
+        .dialog-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- 顶部设置 -->
+        <!-- 顶部设置 + 提交按钮 -->
         <div class="settings-bar">
             <div class="setting-group">
                 <span class="setting-label">API:</span>
@@ -402,11 +466,14 @@
             </div>
             <div class="setting-group">
                 <span class="setting-label">默认牌组:</span>
-                <input type="text" class="setting-input deck-input" id="defaultDeck" placeholder="Default">
+                <select class="setting-select" id="deckSelect">
+                    <!--动态填充 -->
+                </select>
+                <button class="btn btn-danger" id="deleteDeckBtn" style="padding: 6px 12px; font-size: 12px; display: none;">删除</button>
             </div>
-            <div class="setting-group">
-                <span class="setting-label">默认标签:</span>
-                <input type="text" class="setting-input tags-input" id="defaultTags" placeholder="tag1 tag2">
+            <div class="setting-group" style="margin-left: auto;">
+                <span class="stats" id="statsInfo" style="margin-right: 8px;"></span>
+                <button class="btn btn-primary" id="submitAllBtn">提交全部</button>
             </div>
         </div>
 
@@ -430,9 +497,17 @@
                 <button class="btn btn-secondary" id="addCardBtn">+ 添加卡片</button>
                 <button class="btn btn-secondary" id="clearSuccessBtn">清除已成功</button>
             </div>
-            <div class="right-actions">
-                <span class="stats" id="statsInfo">0 张卡片</span>
-                <button class="btn btn-primary" id="submitAllBtn">提交全部</button>
+        </div>
+    </div>
+
+    <!-- 自定义对话框 -->
+    <div id="customDialog" class="dialog-overlay" style="display: none;">
+        <div class="dialog-content">
+            <div class="dialog-title" id="dialogTitle">输入</div>
+            <input type="text" class="dialog-input" id="dialogInput" placeholder="">
+            <div class="dialog-buttons">
+                <button class="btn btn-secondary" id="dialogCancel">取消</button>
+                <button class="btn btn-primary" id="dialogConfirm">确定</button>
             </div>
         </div>
     </div>
@@ -447,12 +522,19 @@
             return Date.now().toString(36) + Math.random().toString(36).substr(2);
         }
 
-        // ==================== DOM 元素 ====================
+        // ==================== DOM元素 ====================
         const domainSelect = document.getElementById('domainSelect');
         const customDomain = document.getElementById('customDomain');
-        const defaultDeck = document.getElementById('defaultDeck');
-        const defaultTags = document.getElementById('defaultTags');
+        const deckSelect = document.getElementById('deckSelect');
+        const deleteDeckBtn = document.getElementById('deleteDeckBtn');
         const cardsList = document.getElementById('cardsList');
+        
+        // 对话框元素
+        const customDialog = document.getElementById('customDialog');
+        const dialogTitle = document.getElementById('dialogTitle');
+        const dialogInput = document.getElementById('dialogInput');
+        const dialogConfirm = document.getElementById('dialogConfirm');
+        const dialogCancel = document.getElementById('dialogCancel');
         const addCardBtn = document.getElementById('addCardBtn');
         const clearSuccessBtn = document.getElementById('clearSuccessBtn');
         const submitAllBtn = document.getElementById('submitAllBtn');
@@ -463,7 +545,7 @@
             // 应用主题
             applyTheme();
             
-            // 填充预设域名
+            //预设域名
             const presets = window.ankiApi?.presetDomains || [
                 { label: '本地开发', value: 'http://localhost:8080' }
             ];
@@ -472,7 +554,10 @@
                 `<option value="${d.value}">${d.label}</option>`
             ).join('') + '<option value="custom">自定义...</option>';
             
-            // 恢复保存的设置
+            //牌组下拉框
+            populateDeckSelect();
+            
+            //恢复保存的设置
             const savedDomain = window.ankiStorage?.getDomain() || presets[0].value;
             const isPreset = presets.some(p => p.value === savedDomain);
             
@@ -485,15 +570,23 @@
                 customDomain.style.display = 'block';
             }
             
-            defaultDeck.value = window.ankiStorage?.getDefaultDeck() || '';
-            defaultTags.value = window.ankiStorage?.getDefaultTags() || '';
-            
-            // 添加初始卡片
-            if (cards.length === 0) {
-                addCard();
+            //恢复默认牌组选择
+            const savedDeck = window.ankiStorage?.getDefaultDeck() || '';
+            if (savedDeck) {
+                const option = deckSelect.querySelector(`option[value="${savedDeck}"]`);
+                if (option) {
+                    deckSelect.value = savedDeck;
+                }
             }
             
-            // 绑定事件
+            // 添加初始卡片（默认5个）
+            if (cards.length === 0) {
+                for (let i = 0; i < 5; i++) {
+                    addCard();
+                }
+            }
+            
+            //绑定事件
             bindEvents();
             
             // 更新统计
@@ -512,9 +605,73 @@
             }
         }
 
+        //牌组下拉框
+        function populateDeckSelect() {
+            const allDecks = window.ankiApi?.getAllDecks ? window.ankiApi.getAllDecks() : [
+                { label: 'Default', value: 'Default', isPreset: true }
+            ];
+            
+            // 为每个选项生成HTML
+            const optionsHtml = allDecks.map(d => 
+                `<option value="${d.value}" data-preset="${d.isPreset}">${d.label}</option>`
+            ).join('') + '<option value="custom">+ 新建牌组...</option>';
+            
+            deckSelect.innerHTML = optionsHtml;
+            
+            // 更新删除按钮状态
+            updateDeleteButton();
+        }
+
+        // 删除自定义牌组
+        function deleteCustomDeck() {
+            const selectedValue = deckSelect.value;
+            const selectedOption = deckSelect.options[deckSelect.selectedIndex];
+            const isPreset = selectedOption?.dataset?.preset === 'true';
+            
+            //预设牌组不能删除
+            if (isPreset || selectedValue === 'custom') {
+                alert('预设牌组无法删除');
+                return;
+            }
+            
+            //确认删除
+            if (!confirm(`确定要删除牌组 "${selectedValue}"吗？此操作不可恢复。`)) {
+                return;
+            }
+            
+            //调用删除函数
+            if (window.ankiApi?.removeCustomDeck) {
+                const success = window.ankiApi.removeCustomDeck(selectedValue);
+                if (success) {
+                    // 重新填充下拉框
+                    populateDeckSelect();
+                    // 选择默认牌组
+                    deckSelect.value = 'Default';
+                    // 保存选择
+                    window.ankiStorage?.setDefaultDeck('Default');
+                } else {
+                    alert('删除失败');
+                }
+            }
+        }
+
+        // 更新删除按钮状态
+        function updateDeleteButton() {
+            const selectedValue = deckSelect.value;
+            const selectedOption = deckSelect.options[deckSelect.selectedIndex];
+            const isPreset = selectedOption?.dataset?.preset === 'true';
+            
+            //预设牌组和"新建牌组"选项隐藏删除按钮
+            if (isPreset || selectedValue === 'custom' || selectedValue === '') {
+                deleteDeckBtn.style.display = 'none';
+            } else {
+                deleteDeckBtn.style.display = 'inline-block';
+            }
+        }
+
         // 绑定事件
         function bindEvents() {
-            // 域名选择变化
+            //域名选择变化
             domainSelect.addEventListener('change', () => {
                 if (domainSelect.value === 'custom') {
                     customDomain.style.display = 'block';
@@ -525,20 +682,49 @@
                 }
             });
             
-            customDomain.addEventListener('blur', saveDomain);
-            defaultDeck.addEventListener('blur', () => {
-                window.ankiStorage?.setDefaultDeck(defaultDeck.value);
-            });
-            defaultTags.addEventListener('blur', () => {
-                window.ankiStorage?.setDefaultTags(defaultTags.value);
+            //牌组选择变化
+            deckSelect.addEventListener('change', async () => {
+                if (deckSelect.value === 'custom') {
+                    // 弹出对话框让用户输入新牌组名称
+                    const newDeckName = await showDialog('请输入新牌组名称:', '例如: 学习::英语');
+                    if (newDeckName) {
+                        // 添加到自定义牌组
+                        if (window.ankiApi?.addCustomDeck) {
+                            const success = window.ankiApi.addCustomDeck(newDeckName);
+                            if (success) {
+                                // 重新填充下拉框并选中
+                                populateDeckSelect();
+                                deckSelect.value = newDeckName;
+                                // 保存选择
+                                window.ankiStorage?.setDefaultDeck(newDeckName);
+                            } else {
+                                alert('该牌组已存在');
+                                deckSelect.value = 'Default';
+                            }
+                        }
+                    } else {
+                        // 用户取消或输入为空，返回默认
+                        deckSelect.value = 'Default';
+                    }
+                } else {
+                    // 保存选择的牌组
+                    window.ankiStorage?.setDefaultDeck(deckSelect.value);
+                    // 更新删除按钮状态
+                    updateDeleteButton();
+                }
             });
             
+            // 删除牌组按钮
+            deleteDeckBtn.addEventListener('click', deleteCustomDeck);
+            
+            customDomain.addEventListener('blur', saveDomain);
+                        
             // 按钮事件
             addCardBtn.addEventListener('click', () => addCard());
             clearSuccessBtn.addEventListener('click', clearSuccessCards);
             submitAllBtn.addEventListener('click', submitAllCards);
             
-            // 键盘快捷键
+            //键盘快捷键
             document.addEventListener('keydown', (e) => {
                 // Ctrl/Cmd + Enter 提交
                 if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
@@ -549,6 +735,11 @@
                 if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
                     e.preventDefault();
                     addCard();
+                }
+                // Delete键删除当前选中的自定义牌组
+                if (e.key === 'Delete' && deleteDeckBtn.style.display === 'inline-block') {
+                    e.preventDefault();
+                    deleteCustomDeck();
                 }
             });
         }
@@ -565,6 +756,55 @@
                 return customDomain.value.trim() || 'http://localhost:8080';
             }
             return domainSelect.value;
+        }
+
+        // 获取当前选中的牌组
+        function getSelectedDeck() {
+            return deckSelect.value || 'Default';
+        }
+
+        // 显示自定义对话框
+        function showDialog(title, placeholder = '') {
+            return new Promise((resolve) => {
+                dialogTitle.textContent = title;
+                dialogInput.placeholder = placeholder;
+                dialogInput.value = '';
+                customDialog.style.display = 'flex';
+                dialogInput.focus();
+                
+                const handleConfirm = () => {
+                    const value = dialogInput.value.trim();
+                    customDialog.style.display = 'none';
+                    cleanup();
+                    resolve(value);
+                };
+                
+                const handleCancel = () => {
+                    customDialog.style.display = 'none';
+                    cleanup();
+                    resolve(null);
+                };
+                
+                const handleKeydown = (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleConfirm();
+                    } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        handleCancel();
+                    }
+                };
+                
+                const cleanup = () => {
+                    dialogConfirm.removeEventListener('click', handleConfirm);
+                    dialogCancel.removeEventListener('click', handleCancel);
+                    dialogInput.removeEventListener('keydown', handleKeydown);
+                };
+                
+                dialogConfirm.addEventListener('click', handleConfirm);
+                dialogCancel.addEventListener('click', handleCancel);
+                dialogInput.addEventListener('keydown', handleKeydown);
+            });
         }
 
         // ==================== 卡片管理 ====================
@@ -734,14 +974,17 @@
             const pending = cards.filter(c => c.status === 'pending').length;
             const success = cards.filter(c => c.status === 'success').length;
             const error = cards.filter(c => c.status === 'error').length;
-            const valid = cards.filter(c => c.front.trim() && c.back.trim()).length;
+            const valid = getValidCardsToSubmit().length; //使用新的函数
             
-            let stats = `${total} 张卡片`;
+            let stats = `${total}张`;
             if (success > 0) {
                 stats += ` | <span class="stats-success">${success} 成功</span>`;
             }
             if (error > 0) {
-                stats += ` | <span class="stats-error">${error} 失败</span>`;
+                stats += ` | <span class="stats-error">${error}失败</span>`;
+            }
+            if (valid > 0) {
+                stats += ` | <span class="stats-success">${valid}待</span>`;
             }
             
             statsInfo.innerHTML = stats;
@@ -751,28 +994,39 @@
             submitAllBtn.textContent = isSubmitting ? '提交中...' : `提交全部 (${valid})`;
         }
 
+        // 获取有效的待提交卡片
+        function getValidCardsToSubmit() {
+            return cards.filter(c => 
+                c.front.trim() && c.back.trim() && c.status !== 'success'
+            );
+        }
+
         // ==================== 提交 ====================
         
         async function submitAllCards() {
             if (isSubmitting) return;
             
             const domain = getDomain();
-            const deck = defaultDeck.value.trim();
-            const tags = defaultTags.value.trim();
+            const deck = getSelectedDeck();
             
-            // 筛选待提交的卡片（有内容且未成功的）
-            const toSubmit = cards.filter(c => 
-                c.front.trim() && c.back.trim() && c.status !== 'success'
-            );
+            //待提交的卡片（有内容且未成功的）
+            const toSubmit = getValidCardsToSubmit();
             
+            //新的验证：如果没有有效卡片，给出提示
             if (toSubmit.length === 0) {
+                const emptyCards = cards.filter(c => !c.front.trim() || !c.back.trim());
+                if (emptyCards.length > 0) {
+                    alert(`有 ${emptyCards.length} 个卡片未填写完整内容，请填写正面和背面内容后再提交。`);
+                } else {
+                    alert('没有需要提交的卡片');
+                }
                 return;
             }
             
             isSubmitting = true;
             updateStats();
             
-            // 标记所有待提交的卡片为 submitting 状态
+            //标记所有待提交的卡片为 submitting状态
             toSubmit.forEach(card => {
                 card.status = 'submitting';
                 card.error = null;
@@ -788,9 +1042,6 @@
                 
                 if (deck) {
                     cardData.deck = deck;
-                }
-                if (tags) {
-                    cardData.tags = tags;
                 }
                 
                 try {
