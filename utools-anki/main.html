@@ -516,6 +516,7 @@
         // ==================== 数据管理 ====================
         let cards = [];
         let isSubmitting = false;
+        let isCreatingDeck = false;
 
         // 生成唯一ID
         function generateId() {
@@ -684,27 +685,36 @@
             
             //牌组选择变化
             deckSelect.addEventListener('change', async () => {
+                if (isCreatingDeck) {
+                    return;
+                }
+                
                 if (deckSelect.value === 'custom') {
-                    // 弹出对话框让用户输入新牌组名称
-                    const newDeckName = await showDialog('请输入新牌组名称:', '例如: 学习::英语');
-                    if (newDeckName) {
-                        // 添加到自定义牌组
-                        if (window.ankiApi?.addCustomDeck) {
-                            const success = window.ankiApi.addCustomDeck(newDeckName);
-                            if (success) {
-                                // 重新填充下拉框并选中
-                                populateDeckSelect();
-                                deckSelect.value = newDeckName;
-                                // 保存选择
-                                window.ankiStorage?.setDefaultDeck(newDeckName);
-                            } else {
-                                alert('该牌组已存在');
-                                deckSelect.value = 'Default';
+                    isCreatingDeck = true;
+                    try {
+                        // 弹出对话框让用户输入新牌组名称
+                        const newDeckName = await showDialog('请输入新牌组名称:', '例如: 学习::英语');
+                        if (newDeckName) {
+                            // 添加到自定义牌组
+                            if (window.ankiApi?.addCustomDeck) {
+                                const success = window.ankiApi.addCustomDeck(newDeckName);
+                                if (success) {
+                                    // 重新填充下拉框并选中
+                                    populateDeckSelect();
+                                    deckSelect.value = newDeckName;
+                                    // 保存选择
+                                    window.ankiStorage?.setDefaultDeck(newDeckName);
+                                } else {
+                                    alert('该牌组已存在');
+                                    deckSelect.value = 'Default';
+                                }
                             }
+                        } else {
+                            // 用户取消或输入为空，返回默认
+                            deckSelect.value = 'Default';
                         }
-                    } else {
-                        // 用户取消或输入为空，返回默认
-                        deckSelect.value = 'Default';
+                    } finally {
+                        isCreatingDeck = false;
                     }
                 } else {
                     // 保存选择的牌组
